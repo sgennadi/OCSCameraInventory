@@ -1,4 +1,4 @@
-﻿param(
+param(
     [switch]$ForceInventory
 )
 
@@ -44,6 +44,7 @@ function Get-PeArchitecture {
         switch ($machine) {
             0x014C { return "x86" }
             0x8664 { return "x64" }
+            0xAA64 { return "arm64" }
             default {
                 throw ("Unsupported PE machine 0x{0:X4}: {1}" -f $machine, $Path)
             }
@@ -119,6 +120,25 @@ $architecture = Get-PeArchitecture -Path $ocsExe
 $versionInfo = (Get-Item $ocsExe).VersionInfo
 $agentVersion = $versionInfo.ProductVersion
 
+Write-Host "OCS Agent:"
+Write-Host "  EXE: $ocsExe"
+Write-Host "  Version: $agentVersion"
+Write-Host "  Architecture: $architecture"
+Write-Host ""
+
+if ($architecture -eq "arm64") {
+    throw @"
+A native ARM64 OCSInventory.exe was detected.
+
+This project currently publishes x86 and x64 plugins only because the
+upstream OCS Windows Agent plugin project does not provide a native ARM64
+plugin target/ABI that has been validated by this project.
+
+If OCSInventory.exe is x64 or x86 on Windows ARM64, this installer will
+select the matching emulated x64/x86 plugin automatically.
+"@
+}
+
 $dll = Join-Path `
     $PSScriptRoot `
     ("build\{0}\OCSCameraInventory.dll" -f $architecture)
@@ -128,15 +148,9 @@ if (-not (Test-Path $dll)) {
 The $architecture plugin DLL was not found:
 $dll
 
-Run Build-All.ps1 first.
+Run Build-All.ps1 first, or download the matching DLL from the GitHub Actions artifacts.
 "@
 }
-
-Write-Host "OCS Agent:"
-Write-Host "  EXE: $ocsExe"
-Write-Host "  Version: $agentVersion"
-Write-Host "  Architecture: $architecture"
-Write-Host ""
 
 New-Item -ItemType Directory `
     -Path $plugins `
@@ -188,19 +202,5 @@ Write-Host ""
 
 if ($ForceInventory) {
     Write-Host "Forcing OCS inventory..."
-
-    & $ocsExe /force /debug=2
-
-    Start-Sleep -Seconds 35
-
-    $log = Join-Path `
-        $env:ProgramData `
-        "OCS Inventory NG\Agent\ocsinventory.log"
-
-    if (Test-Path $log) {
-        Select-String `
-            -Path $log `
-            -Pattern "DLL PLUGIN|OCSCameraInventory" |
-            Select-Object -Last 30
-    }
+    & $ocsExe /force
 }

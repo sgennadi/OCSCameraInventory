@@ -1,0 +1,131 @@
+name: Build Windows DLLs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Build-All.ps1"
+      - "Install-Universal.ps1"
+      - "README.md"
+      - "queries.sql"
+      - "src/**"
+      - ".github/workflows/build-windows.yml"
+  pull_request:
+    paths:
+      - "Build-All.ps1"
+      - "Install-Universal.ps1"
+      - "README.md"
+      - "queries.sql"
+      - "src/**"
+      - ".github/workflows/build-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build x86 and x64
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show build environment
+        shell: powershell
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+              throw "vswhere.exe was not found on the runner."
+          }
+          & $vswhere -latest -products * -property installationPath
+
+      - name: Clean generated output
+        shell: powershell
+        run: |
+          if (Test-Path ".\build") {
+              Remove-Item ".\build" -Recurse -Force
+          }
+          if (Test-Path ".\obj") {
+              Remove-Item ".\obj" -Recurse -Force
+          }
+
+      - name: Build x86 and x64
+        shell: powershell
+        run: |
+          Set-ExecutionPolicy -Scope Process Bypass -Force
+          .\Build-All.ps1 -Architecture Both
+
+      - name: Verify DLL architecture
+        shell: powershell
+        run: |
+          function Get-PeMachine {
+              param([Parameter(Mandatory=$true)][string]$Path)
+
+              $stream = [System.IO.File]::OpenRead($Path)
+              try {
+                  $reader = New-Object System.IO.BinaryReader($stream)
+                  $stream.Position = 0x3C
+                  $peOffset = $reader.ReadInt32()
+                  $stream.Position = $peOffset
+                  if ($reader.ReadUInt32() -ne 0x00004550) {
+                      throw "Invalid PE signature: $Path"
+                  }
+                  return $reader.ReadUInt16()
+              }
+              finally {
+                  $stream.Dispose()
+              }
+          }
+
+          $x86 = ".\build\x86\OCSCameraInventory.dll"
+          $x64 = ".\build\x64\OCSCameraInventory.dll"
+
+          if (-not (Test-Path $x86)) { throw "Missing x86 DLL: $x86" }
+          if (-not (Test-Path $x64)) { throw "Missing x64 DLL: $x64" }
+
+          $x86Machine = Get-PeMachine $x86
+          $x64Machine = Get-PeMachine $x64
+
+          if ($x86Machine -ne 0x014C) {
+              throw ("Unexpected x86 PE machine: 0x{0:X4}" -f $x86Machine)
+          }
+          if ($x64Machine -ne 0x8664) {
+              throw ("Unexpected x64 PE machine: 0x{0:X4}" -f $x64Machine)
+          }
+
+          Get-Item $x86, $x64 | Select-Object FullName, Length
+
+      - name: Prepare universal package
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path ".\artifact\x86" -Force | Out-Null
+          New-Item -ItemType Directory -Path ".\artifact\x64" -Force | Out-Null
+          Copy-Item ".\build\x86\OCSCameraInventory.dll" ".\artifact\x86\OCSCameraInventory.dll"
+          Copy-Item ".\build\x64\OCSCameraInventory.dll" ".\artifact\x64\OCSCameraInventory.dll"
+          Copy-Item ".\Install-Universal.ps1" ".\artifact\Install-Universal.ps1"
+          Copy-Item ".\queries.sql" ".\artifact\queries.sql"
+          Copy-Item ".\README.md" ".\artifact\README.md"
+
+      - name: Upload x86 DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: OCSCameraInventory-Windows-x86
+          path: build/x86/OCSCameraInventory.dll
+          if-no-files-found: error
+
+      - name: Upload x64 DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: OCSCameraInventory-Windows-x64
+          path: build/x64/OCSCameraInventory.dll
+          if-no-files-found: error
+
+      - name: Upload universal Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OCSCameraInventory-Universal-Windows
+          path: artifact/**
+          if-no-files-found: error
