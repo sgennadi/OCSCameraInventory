@@ -127,116 +127,51 @@ A native ARM64 `OCSInventory.exe` is detected explicitly and rejected with a cle
 
 Camera records are stored in the existing OCS `inputs` table. No new database table is required.
 
-### Show all cameras
+### CentOS / MariaDB one-line commands
 
-```sql
-SELECT
-    h.NAME AS Computer,
-    h.IPADDR AS IP,
-    h.USERID AS UserName,
-    i.CAPTION AS Camera,
-    i.MANUFACTURER AS Manufacturer,
-    i.INTERFACE AS VID_PID,
-    i.DESCRIPTION AS PnpDeviceId
-FROM inputs i
-JOIN hardware h ON h.ID = i.HARDWARE_ID
-WHERE i.TYPE = 'OCS_CAMERA'
-ORDER BY h.NAME, i.CAPTION;
+All examples below prompt for the database root password and use the `ocsweb` database directly.
+
+Show all cameras:
+
+```bash
+mysql -u root -p ocsweb -e "SELECT h.NAME AS Computer,h.IPADDR AS IP,h.USERID AS UserName,i.CAPTION AS Camera,i.MANUFACTURER AS Manufacturer,i.INTERFACE AS VID_PID,i.DESCRIPTION AS PnpDeviceId,i.POINTTYPE AS Details FROM inputs i JOIN hardware h ON h.ID=i.HARDWARE_ID WHERE i.TYPE='OCS_CAMERA' ORDER BY h.NAME,i.CAPTION;"
 ```
 
-### Find Logitech C920 by USB VID/PID
+Count all cameras:
 
-Logitech C920 commonly identifies as:
-
-```text
-VID_046D
-PID_082D
+```bash
+mysql -u root -p ocsweb -e "SELECT COUNT(*) AS TotalCameras FROM inputs WHERE TYPE='OCS_CAMERA';"
 ```
 
-```sql
-SELECT
-    h.NAME AS Computer,
-    h.IPADDR AS IP,
-    h.USERID AS UserName,
-    i.CAPTION AS Camera,
-    i.MANUFACTURER AS Manufacturer,
-    i.INTERFACE AS VID_PID,
-    i.DESCRIPTION AS PnpDeviceId
-FROM inputs i
-JOIN hardware h ON h.ID = i.HARDWARE_ID
-WHERE i.TYPE = 'OCS_CAMERA'
-  AND UPPER(CONCAT(
-        COALESCE(i.INTERFACE,''),
-        ' ',
-        COALESCE(i.DESCRIPTION,'')
-      )) LIKE '%VID_046D%PID_082D%'
-ORDER BY h.NAME;
+Find Logitech C920 by VID/PID:
+
+```bash
+mysql -u root -p ocsweb -e "SELECT h.NAME AS Computer,h.IPADDR AS IP,h.USERID AS UserName,i.CAPTION AS Camera,i.MANUFACTURER AS Manufacturer,i.INTERFACE AS VID_PID,i.DESCRIPTION AS PnpDeviceId FROM inputs i JOIN hardware h ON h.ID=i.HARDWARE_ID WHERE i.TYPE='OCS_CAMERA' AND UPPER(CONCAT(COALESCE(i.INTERFACE,''),' ',COALESCE(i.DESCRIPTION,''))) LIKE '%VID_046D%PID_082D%' ORDER BY h.NAME;"
 ```
 
-### Find Logitech C920 by model name
+Find Logitech C920 by model name:
 
-```sql
-SELECT
-    h.NAME AS Computer,
-    h.IPADDR AS IP,
-    i.CAPTION,
-    i.MANUFACTURER,
-    i.INTERFACE,
-    i.DESCRIPTION
-FROM inputs i
-JOIN hardware h ON h.ID = i.HARDWARE_ID
-WHERE i.TYPE = 'OCS_CAMERA'
-  AND UPPER(i.CAPTION) LIKE '%C920%'
-ORDER BY h.NAME;
+```bash
+mysql -u root -p ocsweb -e "SELECT h.NAME AS Computer,h.IPADDR AS IP,i.CAPTION AS Camera,i.MANUFACTURER AS Manufacturer,i.INTERFACE AS VID_PID,i.DESCRIPTION AS PnpDeviceId FROM inputs i JOIN hardware h ON h.ID=i.HARDWARE_ID WHERE i.TYPE='OCS_CAMERA' AND UPPER(i.CAPTION) LIKE '%C920%' ORDER BY h.NAME;"
 ```
 
-### Find all Logitech cameras
+Find all Logitech cameras:
 
-```sql
-SELECT
-    h.NAME AS Computer,
-    h.IPADDR AS IP,
-    i.CAPTION,
-    i.MANUFACTURER,
-    i.INTERFACE,
-    i.DESCRIPTION
-FROM inputs i
-JOIN hardware h ON h.ID = i.HARDWARE_ID
-WHERE i.TYPE = 'OCS_CAMERA'
-  AND UPPER(CONCAT(
-        COALESCE(i.MANUFACTURER,''),
-        ' ',
-        COALESCE(i.CAPTION,''),
-        ' ',
-        COALESCE(i.DESCRIPTION,'')
-      )) LIKE '%LOGITECH%'
-ORDER BY h.NAME, i.CAPTION;
+```bash
+mysql -u root -p ocsweb -e "SELECT h.NAME AS Computer,h.IPADDR AS IP,h.USERID AS UserName,i.CAPTION AS Camera,i.MANUFACTURER AS Manufacturer,i.INTERFACE AS VID_PID,i.DESCRIPTION AS PnpDeviceId FROM inputs i JOIN hardware h ON h.ID=i.HARDWARE_ID WHERE i.TYPE='OCS_CAMERA' AND UPPER(CONCAT(COALESCE(i.MANUFACTURER,''),' ',COALESCE(i.CAPTION,''),' ',COALESCE(i.DESCRIPTION,''))) LIKE '%LOGITECH%' ORDER BY h.NAME,i.CAPTION;"
 ```
 
-### Find any camera by USB VID/PID
+Find any camera by VID/PID, replacing `XXXX` and `YYYY`:
 
-Replace `XXXX` and `YYYY`:
-
-```sql
-SELECT
-    h.NAME AS Computer,
-    h.IPADDR AS IP,
-    i.CAPTION,
-    i.MANUFACTURER,
-    i.INTERFACE,
-    i.DESCRIPTION
-FROM inputs i
-JOIN hardware h ON h.ID = i.HARDWARE_ID
-WHERE i.TYPE = 'OCS_CAMERA'
-  AND UPPER(CONCAT(
-        COALESCE(i.INTERFACE,''),
-        ' ',
-        COALESCE(i.DESCRIPTION,'')
-      )) LIKE '%VID_XXXX%PID_YYYY%'
-ORDER BY h.NAME;
+```bash
+mysql -u root -p ocsweb -e "SELECT h.NAME AS Computer,h.IPADDR AS IP,h.USERID AS UserName,i.CAPTION AS Camera,i.MANUFACTURER AS Manufacturer,i.INTERFACE AS VID_PID,i.DESCRIPTION AS PnpDeviceId FROM inputs i JOIN hardware h ON h.ID=i.HARDWARE_ID WHERE i.TYPE='OCS_CAMERA' AND UPPER(CONCAT(COALESCE(i.INTERFACE,''),' ',COALESCE(i.DESCRIPTION,''))) LIKE '%VID_XXXX%PID_YYYY%' ORDER BY h.NAME;"
 ```
 
-More ready-to-use queries are in [`queries.sql`](queries.sql).
+For all additional one-line examples — model text search, per-computer search, manufacturer search, computers with multiple cameras, distinct VID/PID values, counts by model and more — see [`CentOS-MySQL-One-Line-Commands.md`](CentOS-MySQL-One-Line-Commands.md).
+
+### SQL-only examples
+
+The same searches are also available as plain SQL in [`queries.sql`](queries.sql).
 
 ## Project layout
 
@@ -254,6 +189,7 @@ OCSCameraInventory-Universal/
 ├── Build-All.ps1
 ├── Install-Universal.ps1
 ├── queries.sql
+├── CentOS-MySQL-One-Line-Commands.md
 ├── .gitattributes
 ├── .gitignore
 └── README.md
