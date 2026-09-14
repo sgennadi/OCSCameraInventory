@@ -1,0 +1,26 @@
+﻿# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build output
+build-output/
+bin/
+obj/
+Debug/
+Release/
+
+# Compiler/intermediate files
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.tlog
+*.lastbuildstate
+
+# Temporary files
+*.tmp
+*.log
+Thumbs.db
+Desktop.ini
