@@ -31,6 +31,7 @@ function Get-PeMachine {
 }
 
 Write-Host "OCSCameraInventory-Universal - Windows DLL build"
+Write-Host "Visual Studio 2026 / MSVC v145"
 Write-Host "Targets: x86 and/or x64"
 Write-Host "Native ARM64 is not a supported target in this project."
 Write-Host "No MFC or OCS source tree is required."
@@ -46,7 +47,7 @@ $vswhere = $vswhereCandidates |
     Select-Object -First 1
 
 if (-not $vswhere) {
-    throw "vswhere.exe was not found. Install Visual Studio 2022 or Build Tools 2022."
+    throw "vswhere.exe was not found. Install Visual Studio 2026 or Build Tools 2026."
 }
 
 $vsInstall = & $vswhere `
@@ -56,28 +57,42 @@ $vsInstall = & $vswhere `
     -property installationPath |
     Select-Object -First 1
 
-if (-not $vsInstall) {
+$vsVersionText = & $vswhere `
+    -latest `
+    -products * `
+    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+    -property installationVersion |
+    Select-Object -First 1
+
+if (-not $vsInstall -or -not $vsVersionText) {
     throw @"
-Visual C++ x86/x64 build tools were not found.
+Visual Studio 2026 C++ x86/x64 build tools were not found.
 
 Open Visual Studio Installer -> Modify and install:
+- Visual Studio 2026 or Build Tools 2026
 - Desktop development with C++
-- MSVC v143 x86/x64 build tools
+- MSVC v145 x86/x64 build tools
 - Windows 10/11 SDK
 
 MFC is not required for this project.
 "@
 }
 
-$msbuild = & $vswhere `
-    -latest `
-    -products * `
-    -requires Microsoft.Component.MSBuild `
-    -find "MSBuild\**\Bin\MSBuild.exe" |
-    Select-Object -First 1
+try {
+    $vsVersion = [Version]$vsVersionText
+}
+catch {
+    throw "Could not parse Visual Studio version: $vsVersionText"
+}
 
-if (-not $msbuild) {
-    throw "MSBuild.exe was not found."
+if ($vsVersion.Major -lt 18) {
+    throw "Visual Studio 2026 (18.x) is required. Found version $vsVersionText at $vsInstall."
+}
+
+$msbuild = Join-Path $vsInstall "MSBuild\Current\Bin\MSBuild.exe"
+
+if (-not (Test-Path $msbuild)) {
+    throw "MSBuild.exe was not found in the Visual Studio 2026 installation: $msbuild"
 }
 
 $project = Join-Path $PSScriptRoot "src\OCSCameraInventory.vcxproj"
@@ -87,6 +102,8 @@ if (-not (Test-Path $project)) {
 }
 
 Write-Host "Visual Studio: $vsInstall"
+Write-Host "Visual Studio version: $vsVersionText"
+Write-Host "Platform toolset: v145"
 Write-Host "MSBuild: $msbuild"
 Write-Host "Project: $project"
 Write-Host ""
@@ -136,7 +153,7 @@ foreach ($target in $targets) {
     }
 
     Write-Host "============================================================"
-    Write-Host "Building Release|$platform"
+    Write-Host "Building Release|$platform with v145"
     Write-Host "============================================================"
 
     & $msbuild `
@@ -145,11 +162,11 @@ foreach ($target in $targets) {
         /t:Rebuild `
         /p:Configuration=Release `
         /p:Platform=$platform `
-        /p:PlatformToolset=v143 `
+        /p:PlatformToolset=v145 `
         /p:WindowsTargetPlatformVersion=10.0
 
     if ($LASTEXITCODE -ne 0) {
-        throw "Build failed for $platform with exit code $LASTEXITCODE."
+        throw "Build failed for $platform with exit code $LASTEXITCODE. Verify that MSVC v145 x86/x64 build tools are installed."
     }
 
     $dll = Join-Path $outputFolder "OCSCameraInventory.dll"
@@ -170,4 +187,4 @@ foreach ($target in $targets) {
     Write-Host ""
 }
 
-Write-Host "Build finished successfully."
+Write-Host "Build finished successfully with Visual Studio 2026 / v145."

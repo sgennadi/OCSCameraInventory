@@ -54,7 +54,7 @@ Workflow:
 .github/workflows/build-windows.yml
 ```
 
-It runs on pushes to `main`, pull requests that change source/build files, and manual `workflow_dispatch` runs. It builds fresh x86 and x64 DLLs and publishes downloadable Actions artifacts:
+The Windows build uses the GitHub-hosted `windows-2025-vs2026` image, **Visual Studio 2026**, and the **MSVC v145** platform toolset. It runs on pushes to `main`, pull requests that change source/build files, and manual `workflow_dispatch` runs. It builds fresh x86 and x64 DLLs and publishes downloadable Actions artifacts:
 
 ```text
 OCSCameraInventory-Windows-x86
@@ -62,18 +62,18 @@ OCSCameraInventory-Windows-x64
 OCSCameraInventory-Universal-Windows
 ```
 
-The universal artifact contains both DLL architectures plus the installer, SQL examples, one-line CentOS commands, and the optional camera-history setup.
+The universal artifact contains both DLL architectures plus the installer, SQL examples, and camera-history scripts.
 
-> GitHub Actions validates that the project compiles and that each produced PE file has the expected x86/x64 machine type. It does not prove runtime compatibility with every OCS Agent release.
+> GitHub Actions validates that the project compiles with Visual Studio 2026 / v145 and that each produced PE file has the expected x86/x64 machine type. It does not prove runtime compatibility with every OCS Agent release.
 
 ## Local build
 
 Requirements:
 
 - Windows 10/11
-- Visual Studio 2022 or Visual Studio Build Tools 2022
+- Visual Studio 2026 or Visual Studio Build Tools 2026
 - Desktop development with C++
-- MSVC v143 x86/x64 build tools
+- MSVC v145 x86/x64 build tools
 - Windows 10/11 SDK
 
 MFC and the OCS source tree are **not** required to compile this version of the plugin.
@@ -97,6 +97,8 @@ Expected output:
 build\x86\OCSCameraInventory.dll
 build\x64\OCSCameraInventory.dll
 ```
+
+The project file itself targets `PlatformToolset=v145`, so a Visual Studio 2022-only installation is no longer sufficient for local builds unless Visual Studio 2026/v145 is also installed.
 
 ## Install
 
@@ -126,60 +128,6 @@ A native ARM64 `OCSInventory.exe` is detected explicitly and rejected with a cle
 ## Database
 
 Camera records are stored in the existing OCS `inputs` table. No new database table is required for current-state inventory.
-
-### Optional camera replacement history
-
-The standard `inputs` table represents the latest OCS inventory state. If a camera is removed or replaced, the old camera is no longer available there after the next successful inventory.
-
-The optional [`camera-history.sql`](camera-history.sql) adds persistent history without changing the Windows DLL or the standard OCS tables. It creates:
-
-```text
-ocs_camera_history_state   current snapshot used for comparison
-ocs_camera_history         permanent add/remove/replace events
-ocs_camera_history_readable human-readable history view
-```
-
-Install it on the OCS database server:
-
-```bash
-mysql -u root -p ocsweb < camera-history.sql
-```
-
-Enable the MariaDB/MySQL event scheduler:
-
-```bash
-mysql -u root -p -e "SET GLOBAL event_scheduler=ON; SHOW VARIABLES LIKE 'event_scheduler';"
-```
-
-The history snapshot refresh runs every 5 minutes. It does **not** force OCS inventory itself; a hardware change becomes visible to history after the Windows OCS Agent sends its next inventory. For example, with `PROLOG_FREQ=4` and `FREQUENCY=0`, the history process records the change after the next OCS update reaches the server.
-
-Existing cameras are imported as initial `ADDED` events when `camera-history.sql` is installed. History begins at installation time; it cannot reconstruct camera changes that happened earlier.
-
-When exactly one camera disappears and exactly one new camera appears on the same computer between snapshots, the event is recorded as:
-
-```text
-REPLACED: Logitech C920 -> Logitech BRIO
-```
-
-More complex changes involving multiple cameras are stored as separate `ADDED` and `REMOVED` events so no device change is hidden.
-
-Show all history:
-
-```bash
-mysql -u root -p ocsweb -e "SELECT EVENT_TIME,EVENT_TYPE,COMPUTER,IP,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable ORDER BY EVENT_TIME DESC;"
-```
-
-Show replacements only:
-
-```bash
-mysql -u root -p ocsweb -e "SELECT EVENT_TIME,COMPUTER,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable WHERE EVENT_TYPE='REPLACED' ORDER BY EVENT_TIME DESC;"
-```
-
-Show history for one computer:
-
-```bash
-mysql -u root -p ocsweb -e "SELECT EVENT_TIME,EVENT_TYPE,COMPUTER,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable WHERE COMPUTER='IT-ARTUMU' ORDER BY EVENT_TIME DESC;"
-```
 
 ### CentOS / MariaDB one-line commands
 
@@ -221,7 +169,37 @@ Find any camera by VID/PID, replacing `XXXX` and `YYYY`:
 mysql -u root -p ocsweb -e "SELECT h.NAME AS Computer,h.IPADDR AS IP,h.USERID AS UserName,i.CAPTION AS Camera,i.MANUFACTURER AS Manufacturer,i.INTERFACE AS VID_PID,i.DESCRIPTION AS PnpDeviceId FROM inputs i JOIN hardware h ON h.ID=i.HARDWARE_ID WHERE i.TYPE='OCS_CAMERA' AND UPPER(CONCAT(COALESCE(i.INTERFACE,''),' ',COALESCE(i.DESCRIPTION,''))) LIKE '%VID_XXXX%PID_YYYY%' ORDER BY h.NAME;"
 ```
 
-For all additional one-line examples — model text search, per-computer search, manufacturer search, computers with multiple cameras, distinct VID/PID values, counts by model and camera-history searches — see [`CentOS-MySQL-One-Line-Commands.md`](CentOS-MySQL-One-Line-Commands.md).
+For all additional one-line examples — model text search, per-computer search, manufacturer search, computers with multiple cameras, distinct VID/PID values, counts by model and more — see [`CentOS-MySQL-One-Line-Commands.md`](CentOS-MySQL-One-Line-Commands.md).
+
+### Camera replacement history
+
+The standard OCS `inputs` table represents the current inventory state. If you want to preserve camera add/remove/replace history, install the optional history script:
+
+```bash
+mysql -u root -p ocsweb < camera-history.sql
+```
+
+Enable the MariaDB/MySQL event scheduler if it is not already enabled:
+
+```bash
+mysql -u root -p -e "SET GLOBAL event_scheduler=ON; SHOW VARIABLES LIKE 'event_scheduler';"
+```
+
+The history collector checks the current `OCS_CAMERA` state every 5 minutes and records `ADDED`, `REMOVED`, and simple one-for-one `REPLACED` events in separate history tables. It does not modify the standard OCS inventory tables.
+
+Show the complete history:
+
+```bash
+mysql -u root -p ocsweb -e "SELECT EVENT_TIME,EVENT_TYPE,COMPUTER,IP,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable ORDER BY EVENT_TIME DESC;"
+```
+
+Show camera replacements only:
+
+```bash
+mysql -u root -p ocsweb -e "SELECT EVENT_TIME,COMPUTER,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable WHERE EVENT_TYPE='REPLACED' ORDER BY EVENT_TIME DESC;"
+```
+
+History starts when `camera-history.sql` is installed; changes that happened before installation cannot be reconstructed from the current-state `inputs` table.
 
 ### SQL-only examples
 
