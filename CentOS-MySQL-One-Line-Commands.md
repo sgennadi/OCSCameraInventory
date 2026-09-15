@@ -110,4 +110,74 @@ mysql -u root -p ocsweb -e "SELECT DISTINCT h.NAME AS Computer,h.IPADDR AS IP FR
 mysql -u root -p ocsweb -e "SELECT COUNT(DISTINCT i.HARDWARE_ID) AS ComputersWithCamera FROM inputs i WHERE i.TYPE='OCS_CAMERA';"
 ```
 
+# Optional camera history
+
+Install the history tables/procedure/event from the repository file:
+
+```bash
+mysql -u root -p ocsweb < camera-history.sql
+```
+
+Enable the MariaDB/MySQL event scheduler and verify it:
+
+```bash
+mysql -u root -p -e "SET GLOBAL event_scheduler=ON; SHOW VARIABLES LIKE 'event_scheduler';"
+```
+
+## 15. Show all camera history
+
+```bash
+mysql -u root -p ocsweb -e "SELECT EVENT_TIME,EVENT_TYPE,COMPUTER,IP,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable ORDER BY EVENT_TIME DESC;"
+```
+
+## 16. Show camera replacements only
+
+```bash
+mysql -u root -p ocsweb -e "SELECT EVENT_TIME,COMPUTER,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable WHERE EVENT_TYPE='REPLACED' ORDER BY EVENT_TIME DESC;"
+```
+
+## 17. Show camera additions only
+
+```bash
+mysql -u root -p ocsweb -e "SELECT EVENT_TIME,COMPUTER,NEW_CAMERA,NEW_MANUFACTURER,NEW_VID_PID FROM ocs_camera_history_readable WHERE EVENT_TYPE='ADDED' ORDER BY EVENT_TIME DESC;"
+```
+
+## 18. Show camera removals only
+
+```bash
+mysql -u root -p ocsweb -e "SELECT EVENT_TIME,COMPUTER,OLD_CAMERA,OLD_MANUFACTURER,OLD_VID_PID FROM ocs_camera_history_readable WHERE EVENT_TYPE='REMOVED' ORDER BY EVENT_TIME DESC;"
+```
+
+## 19. Show history for one computer
+
+Replace `COMPUTER-NAME` with the required computer name.
+
+```bash
+mysql -u root -p ocsweb -e "SELECT EVENT_TIME,EVENT_TYPE,COMPUTER,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable WHERE UPPER(COMPUTER)=UPPER('COMPUTER-NAME') ORDER BY EVENT_TIME DESC;"
+```
+
+Example for `IT-ARTUMU`:
+
+```bash
+mysql -u root -p ocsweb -e "SELECT EVENT_TIME,EVENT_TYPE,COMPUTER,OLD_CAMERA,OLD_VID_PID,NEW_CAMERA,NEW_VID_PID FROM ocs_camera_history_readable WHERE UPPER(COMPUTER)=UPPER('IT-ARTUMU') ORDER BY EVENT_TIME DESC;"
+```
+
+## 20. Show the current history snapshot
+
+```bash
+mysql -u root -p ocsweb -e "SELECT COMPUTER,IP,CAMERA,MANUFACTURER,VID_PID,FIRST_SEEN,LAST_SEEN FROM ocs_camera_history_state ORDER BY COMPUTER,CAMERA;"
+```
+
+## 21. Run history refresh manually now
+
+```bash
+mysql -u root -p ocsweb -e "CALL refresh_ocs_camera_history();"
+```
+
+## 22. Check the automatic history event
+
+```bash
+mysql -u root -p ocsweb -e "SHOW EVENTS LIKE 'ev_ocs_camera_history_refresh';"
+```
+
 All commands are intentionally written as a single shell line so they can be pasted directly into a CentOS terminal.
