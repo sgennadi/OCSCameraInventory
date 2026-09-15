@@ -9,6 +9,8 @@ on:
       - "Install-Universal.ps1"
       - "README.md"
       - "queries.sql"
+      - "camera-history.sql"
+      - "CentOS-MySQL-One-Line-Commands.md"
       - "src/**"
       - ".github/workflows/build-windows.yml"
   pull_request:
@@ -17,6 +19,8 @@ on:
       - "Install-Universal.ps1"
       - "README.md"
       - "queries.sql"
+      - "camera-history.sql"
+      - "CentOS-MySQL-One-Line-Commands.md"
       - "src/**"
       - ".github/workflows/build-windows.yml"
   workflow_dispatch:
@@ -107,6 +111,8 @@ jobs:
           Copy-Item ".\build\x64\OCSCameraInventory.dll" ".\artifact\x64\OCSCameraInventory.dll"
           Copy-Item ".\Install-Universal.ps1" ".\artifact\Install-Universal.ps1"
           Copy-Item ".\queries.sql" ".\artifact\queries.sql"
+          Copy-Item ".\camera-history.sql" ".\artifact\camera-history.sql"
+          Copy-Item ".\CentOS-MySQL-One-Line-Commands.md" ".\artifact\CentOS-MySQL-One-Line-Commands.md"
           Copy-Item ".\README.md" ".\artifact\README.md"
 
       - name: Upload x86 DLL
