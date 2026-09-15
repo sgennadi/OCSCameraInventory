@@ -25,7 +25,7 @@ TYPE = OCS_CAMERA
 
 The DLL architecture must match the architecture of `OCSInventory.exe`, not the architecture of Windows itself. `Install-Universal.ps1` reads the PE header of the installed agent and chooses the correct DLL automatically.
 
-The upstream OCS Windows Agent 2.9.1 plugin project exposes Win32 and x64 configurations, not a native ARM64 plugin target. For that reason this project does not claim native ARM64 plugin compatibility. If OCS later provides a native ARM64 Windows Agent with a compatible plugin ABI, ARM64 can be evaluated separately.
+The upstream OCS Windows Agent plugin project exposes Win32 and x64 configurations, not a native ARM64 plugin target. For that reason this project does not claim native ARM64 plugin compatibility. If OCS later provides a native ARM64 Windows Agent with a compatible plugin ABI, ARM64 can be evaluated separately.
 
 A Windows `.dll` cannot be loaded by the OCS UnixAgent on Linux. Linux support needs a separate implementation using the UnixAgent plugin/module mechanism and Linux camera interfaces such as `udev`, `/dev/video*`, V4L2 and/or `lsusb`.
 
